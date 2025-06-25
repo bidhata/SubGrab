@@ -11,8 +11,6 @@
 
 *Fast, comprehensive, and intelligent subdomain enumeration for security researchers and bug bounty hunters*
 
-[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Examples](#-examples) • [Contributing](#-contributing)
-
 </div>
 
 ---
@@ -74,14 +72,14 @@ python3 --version
 
 ### Method 1: Clone Repository
 ```bash
-git clone https://github.com/yourusername/fast-sub-recon.git
+git clone https://github.com/bidhata/fast-subrecon/
 cd fast-sub-recon
 pip3 install -r requirements.txt
 ```
 
 ### Method 2: Direct Download
 ```bash
-wget https://raw.githubusercontent.com/yourusername/fast-sub-recon/main/fast_sub_recon.py
+wget https://raw.githubusercontent.com/bidhata/fast-subrecon/main/fast_sub_recon.py
 pip3 install requests dnspython shodan
 ```
 
@@ -299,7 +297,7 @@ Contributions are welcome! Please feel free to submit pull requests, report bugs
 
 ### Development Setup
 ```bash
-git clone https://github.com/yourusername/fast-sub-recon.git
+git clone https://github.com/bidhata/fast-subrecon.git
 cd fast-sub-recon
 pip3 install -r requirements.txt
 python3 -m pytest tests/  # Run tests
