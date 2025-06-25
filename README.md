@@ -316,7 +316,7 @@ python3 -m pytest tests/  # Run tests
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ---
 
@@ -326,14 +326,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Shodan**: For comprehensive host intelligence
 - **DNS Libraries**: dnspython for robust DNS operations
 - **Community**: Security researchers and bug bounty hunters
-
----
-
-## 📞 Support
-
-- 🐛 **Bug Reports**: [Create an issue](https://github.com/yourusername/fast-sub-recon/issues)
-- 💡 **Feature Requests**: [Start a discussion](https://github.com/yourusername/fast-sub-recon/discussions)
-- 📧 **Contact**: your.email@example.com
 
 ---
 
