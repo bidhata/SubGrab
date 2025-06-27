@@ -33,33 +33,23 @@ Fast Sub Recon is a powerful Python-based subdomain discovery tool designed for 
 
 ## 🔥 Features
 
-### 🔍 **Passive Reconnaissance**
-- **Certificate Transparency Logs**: Queries crt.sh and CertSpotter
-- **DNS Enumeration**: Fast DNS resolution with custom resolvers
-- **Web Archives**: Searches Archive.org and AlienVault OTX
-- **Shodan Search**: Multiple query types for comprehensive coverage
+## ✨ Features
 
-### ⚡ **Active Reconnaissance**
-- **Zone Transfer Attempts**: Tests for misconfigured DNS servers
-- **HTTP Enumeration**: Identifies active web services
-- **SSL Certificate Analysis**: Extracts hostnames from SSL certificates
-- **Real IP Discovery**: Attempts to bypass CDN protection
-
-### 📊 **Intelligence Gathering**
-- **Shodan Integration**: Detailed host information including:
-  - Organization and ISP details
-  - Geographic location
-  - Open ports and services
-  - Last update timestamps
-- **HTTP Analysis**: Status codes, server headers, page titles
-- **DNS Resolution**: Multiple DNS server queries for accuracy
-
-### 📁 **Output Formats**
-- **Comprehensive JSON**: Detailed analysis with all metadata
-- **Active Subdomains**: HTTP-accessible hosts only
-- **Inactive Subdomains**: DNS-only discoverable hosts
-- **Combined Lists**: All discovered subdomains
-
+- 🔍 Passive subdomain discovery from multiple public sources
+- ⚙️ Active brute-forcing with smart permutations
+- 📊 HTML, JSON, and plain text reports
+- 🌐 IP, HTTP status, server headers, and title extraction
+- 🔐 Optional SSH port (22) scan
+- 🚀 Multithreaded for high performance
+- 🔐 API Integrations:
+  - Shodan
+  - VirusTotal
+  - SecurityTrails
+  - crt.sh
+  - CommonCrawl
+  - DNSDumpster
+  - AlienVault OTX
+  - Archive.org
 ---
 
 ## 🛠 Installation
@@ -83,54 +73,65 @@ wget https://raw.githubusercontent.com/bidhata/fast-subrecon/main/fast_sub_recon
 pip3 install requests dnspython shodan
 ```
 
-### Dependencies
+---
+
+## 🧪 Usage Examples
+
+Basic usage:
+
 ```bash
-pip3 install requests dnspython shodan
+python fast_sub_recon.py example.com
+```
+
+Use with Shodan and a custom wordlist:
+
+```bash
+python fast_sub_recon.py example.com -s YOUR_SHODAN_API_KEY -w wordlist.txt
+```
+
+Fast mode without passive recon:
+
+```bash
+python fast_sub_recon.py example.com --fast
+```
+
+Scan active subdomains for SSH:
+
+```bash
+python fast_sub_recon.py example.com --scan-ssh
+```
+
+Use custom DNS resolvers and max threads:
+
+```bash
+python fast_sub_recon.py example.com -t 300 --custom-nameservers 1.1.1.1 8.8.8.8
+```
+
+Enable full API integrations:
+
+```bash
+python fast_sub_recon.py example.com \
+  --shodan YOUR_SHODAN_API_KEY \
+  --security-trails YOUR_SECURITYTRAILS_API_KEY \
+  --virustotal YOUR_VIRUSTOTAL_API_KEY
 ```
 
 ---
 
-## 🚀 Usage
-
-### Basic Usage
-```bash
-# Simple subdomain discovery
-python3 fast_sub_recon.py example.com
-
-# With custom thread count
-python3 fast_sub_recon.py example.com -t 300
-
-# With Shodan integration
-python3 fast_sub_recon.py example.com -s YOUR_SHODAN_API_KEY
-```
-
-### Advanced Usage
-```bash
-# Custom wordlist
-python3 fast_sub_recon.py example.com -w /path/to/wordlist.txt
-
-# Fast mode (skip detailed Shodan lookups)
-python3 fast_sub_recon.py example.com --fast
-
-# Custom timeout
-python3 fast_sub_recon.py example.com --timeout 5
-
-# Save only active subdomains
-python3 fast_sub_recon.py example.com -o active_subs.txt --active-only
-```
-
-### Command-line Options
+## Command Line Options
 
 | Option | Description | Default Value | Example |
 |--------|-------------|---------------|---------|
-| `domain` | Target domain to scan **(required)** | N/A | `example.com` |
-| `-t`, `--threads` | Number of concurrent threads to use | `200` | `-t 500` |
-| `-s`, `--shodan` | Shodan API key for enhanced reconnaissance | `None` (disabled) | `-s YOUR_SHODAN_API_KEY` |
-| `-w`, `--wordlist` | Path to external subdomain wordlist file | Built-in wordlist | `-w custom_wordlist.txt` |
-| `--timeout` | Request timeout in seconds | `3` | `--timeout 5` |
-| `--fast` | Enable fast mode (skip Shodan lookups) | `False` | `--fast` |
-| `--scan-ssh` | Scan active subdomains for SSH port (22) | `False` | `--scan-ssh` |
-| `--custom-nameservers` | Custom DNS nameservers to use (space-separated) | System default | `--custom-nameservers 8.8.8.8 1.1.1.1` |
+| `domain` | **REQUIRED** Target domain to scan | None | `example.com` |
+| `-t`, `--threads` | Number of threads to use for parallel operations | 200 | `-t 500` |
+| `-s`, `--shodan` | Shodan API key for enhanced passive reconnaissance | None | `-s YOUR_SHODAN_KEY` |
+| `-w`, `--wordlist` | Path to custom wordlist file | Built-in wordlist | `-w custom_words.txt` |
+| `--timeout` | Timeout in seconds for network requests | 3 | `--timeout 5` |
+| `--fast` | Enable fast mode (skip intensive operations like advanced brute-forcing) | False | `--fast` |
+| `--scan-ssh` | Scan active subdomains for open SSH port (22) | False | `--scan-ssh` |
+| `--custom-nameservers` | Custom DNS nameservers to use (space separated) | System default | `--custom-nameservers 8.8.8.8 1.1.1.1` |
+| `--security-trails` | SecurityTrails API key | None | `--security-trails YOUR_KEY` |
+| `--virustotal` | VirusTotal API key | None | `--virustotal YOUR_KEY` |
 
 ### Usage Examples
 
@@ -159,12 +160,36 @@ python3 fast_sub_recon.py example.com -o active_subs.txt --active-only
    ./fast_sub_recon.py example.com --fast
    ```
 
-### Output Files
-The tool automatically generates timestamped output files:
-- `{domain}_all_{timestamp}.txt` - All discovered subdomains
-- `{domain}_active_{timestamp}.txt` - Active HTTP(S) subdomains
-- `{domain}_inactive_{timestamp}.txt` - DNS-only subdomains
-- `{domain}_ssh_{timestamp}.txt` - Subdomains with open SSH port (when using `--scan-ssh`)
+---
+
+## 📁 Output Files
+
+Each run creates a directory named after the target domain:
+
+```
+example.com/
+├── example.com_all_<timestamp>.txt
+├── example.com_active_<timestamp>.txt
+├── example.com_inactive_<timestamp>.txt
+├── example.com_ssh_<timestamp>.txt         # if SSH scan enabled
+├── example.com_report_<timestamp>.json
+└── example.com_report_<timestamp>.html
+```
+
+---
+
+## 🌐 HTML Report
+
+The generated HTML report includes:
+
+- ✅ Subdomain activity status
+- 🌍 IP address mapping
+- 🔍 HTTP status, page title, and server banner
+- 🔐 SSH port availability
+- 🧩 Sortable columns and filter buttons
+
+It’s mobile-responsive, sortable, and easy to analyze visually.
+
 
 ### Important Notes
 - Always obtain proper authorization before scanning any domain
@@ -220,17 +245,6 @@ $ python3 fast_sub_recon.py example.com -w subdomains.txt -t 500
 [+] Testing 50089 subdomains with 500 threads...
 ```
 
----
-
-## 📊 Output Files
-
-The tool automatically generates timestamped output files:
-
-```
-example.com_subdomains_20241225_143022.json    # Comprehensive JSON report
-example.com_active_20241225_143022.txt         # Active subdomains only
-example.com_inactive_20241225_143022.txt       # Inactive subdomains only
-example.com_all_20241225_143022.txt           # All discovered subdomains
 ```
 
 ### JSON Output Structure
@@ -333,14 +347,6 @@ python3 fast_sub_recon.py example.com --fast
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit pull requests, report bugs, or suggest features.
-
-### Development Setup
-```bash
-git clone https://github.com/bidhata/fast-subrecon.git
-cd fast-sub-recon
-pip3 install -r requirements.txt
-python3 -m pytest tests/  # Run tests
-```
 
 ### Areas for Contribution
 - Additional passive reconnaissance sources
