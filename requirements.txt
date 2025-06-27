@@ -1,0 +1,26 @@
+# Requirements for Enhanced Subdomain Discovery Tool
+# Core HTTP and networking libraries
+requests>=2.28.0
+urllib3>=1.26.0
+
+# DNS resolution and manipulation
+dnspython>=2.2.0
+
+# Shodan API integration
+shodan>=1.28.0
+
+# Standard library modules (included with Python)
+# - socket (built-in)
+# - concurrent.futures (built-in)
+# - argparse (built-in)
+# - json (built-in)
+# - time (built-in)
+# - os (built-in)
+# - urllib.parse (built-in)
+# - ssl (built-in)
+# - re (built-in)
+
+# Optional: Additional security and performance packages
+certifi>=2022.12.7
+charset-normalizer>=3.0.0
+idna>=3.4
