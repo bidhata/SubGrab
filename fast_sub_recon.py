@@ -170,7 +170,10 @@ class SubdomainFinder:
             self.dns_enumeration,
             self.web_archives,
             self.search_engines,
-            self.rapiddns_search
+            self.rapiddns_search,
+            self.dnsdumpster_search,
+            self.common_crawl_search,
+            self.dns_brute_advanced
         ]
         
         # Add API-based methods if keys are available
@@ -181,13 +184,191 @@ class SubdomainFinder:
         if self.shodan_api:
             methods.append(self.shodan_search)
             
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, self.threads)) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(10, self.threads)) as executor:
             futures = {executor.submit(method) for method in methods}
             for future in concurrent.futures.as_completed(futures):
                 try:
                     future.result()
                 except Exception as e:
                     print(f"[-] Passive recon error: {e}")
+                    
+        # Perform PTR lookups after initial discovery
+        if self.subdomains:
+            self.precompute_ip_info()
+            self.ptr_lookup()
+
+    def dnsdumpster_search(self):
+        """Query DNSdumpster for subdomains"""
+        print("[+] Querying DNSdumpster...")
+        url = "https://dnsdumpster.com/"
+        try:
+            session = self.get_session()
+            # Get CSRF token
+            response = session.get(url, timeout=self.timeout)
+            csrf_match = re.search(r"name='csrfmiddlewaretoken' value='(.*?)'", response.text)
+            if not csrf_match:
+                print("[-] DNSdumpster: Failed to get CSRF token")
+                return
+                
+            csrf_token = csrf_match.group(1)
+            
+            # Perform search
+            headers = {'Referer': url}
+            data = {
+                'csrfmiddlewaretoken': csrf_token,
+                'targetip': self.domain
+            }
+            response = session.post(url, data=data, headers=headers, timeout=self.timeout)
+            
+            if response.status_code != 200:
+                print(f"[-] DNSdumpster returned status {response.status_code}")
+                return
+                
+            # Extract subdomains
+            pattern = r'([a-zA-Z0-9][a-zA-Z0-9\-]*\.)+' + re.escape(self.domain)
+            subdomains = set(re.findall(pattern, response.text))
+            
+            for sub in subdomains:
+                if sub not in self.subdomains:
+                    self.subdomains.add(sub)
+                    print(f"[DNSdumpster] Found: {sub}")
+        except Exception as e:
+            print(f"[-] DNSdumpster error: {e}")
+
+    def common_crawl_search(self):
+        """Query CommonCrawl for subdomains"""
+        print("[+] Querying CommonCrawl...")
+        url = f"https://index.commoncrawl.org/collinfo.json"
+        try:
+            session = self.get_session()
+            response = session.get(url, timeout=self.timeout)
+            if response.status_code != 200:
+                print(f"[-] CommonCrawl index returned status {response.status_code}")
+                return
+                
+            indexes = response.json()
+            if not indexes:
+                print("[-] No CommonCrawl indexes available")
+                return
+                
+            latest_index = indexes[0]['id']
+            api_url = f"https://index.commoncrawl.org/{latest_index}-index?url=*.{self.domain}&output=json"
+            response = session.get(api_url, stream=True, timeout=self.timeout)
+            
+            if response.status_code != 200:
+                print(f"[-] CommonCrawl API returned status {response.status_code}")
+                return
+                
+            subdomains = set()
+            for line in response.iter_lines():
+                if line:
+                    try:
+                        data = json.loads(line)
+                        url = data.get('url', '')
+                        if not url:
+                            continue
+                        hostname = urlparse(url).hostname
+                        if hostname and hostname.endswith(f'.{self.domain}') and hostname != self.domain:
+                            subdomains.add(hostname)
+                    except json.JSONDecodeError:
+                        continue
+            
+            for sub in subdomains:
+                if sub not in self.subdomains:
+                    self.subdomains.add(sub)
+                    print(f"[CommonCrawl] Found: {sub}")
+        except Exception as e:
+            print(f"[-] CommonCrawl error: {e}")
+
+    def dns_brute_advanced(self):
+        """Advanced DNS brute-forcing with common prefixes"""
+        print("[+] Performing advanced DNS brute-forcing...")
+        prefixes = [
+            'dev', 'test', 'staging', 'prod', 'uat', 'preprod', 'sandbox', 
+            'api', 'app', 'web', 'mobile', 'admin', 'internal', 'external',
+            'backup', 'db', 'mail', 'email', 'vpn', 'gateway', 'proxy',
+            'aws', 'azure', 'gcp', 'cloud', 'cdn', 'lb', 's3'
+        ]
+        
+        # Generate permutations
+        candidates = set()
+        base_domain = self.domain.split('.')[0]
+        
+        for prefix in prefixes:
+            candidates.add(f"{prefix}.{base_domain}")
+            candidates.add(f"{prefix}-{base_domain}")
+            for i in range(1, 5):
+                candidates.add(f"{prefix}{i}.{base_domain}")
+                candidates.add(f"{prefix}-{i}.{base_domain}")
+        
+        # Add common cloud patterns
+        cloud_patterns = [
+            f"{base_domain}-aws", f"{base_domain}-azure", f"{base_domain}-gcp",
+            f"{base_domain}-cloud", f"aws-{base_domain}", f"azure-{base_domain}",
+            f"gcp-{base_domain}", f"cloud-{base_domain}", f"s3-{base_domain}",
+            f"{base_domain}-s3", f"storage-{base_domain}"
+        ]
+        candidates.update(cloud_patterns)
+        
+        # Add environment-specific permutations
+        for env in ['dev', 'test', 'staging', 'prod', 'qa']:
+            candidates.add(f"{env}.{base_domain}")
+            candidates.add(f"{env}-{base_domain}")
+            candidates.add(f"{base_domain}-{env}")
+            for i in range(1, 3):
+                candidates.add(f"{env}{i}.{base_domain}")
+                candidates.add(f"{env}-{i}.{base_domain}")
+        
+        print(f"[+] Generated {len(candidates)} advanced permutations")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.threads) as executor:
+            futures = {executor.submit(self.check_subdomain, candidate.split('.')[0]): candidate for candidate in candidates}
+            for future in concurrent.futures.as_completed(futures):
+                candidate = futures[future]
+                try:
+                    result = future.result()
+                    if result and result not in self.subdomains:
+                        self.subdomains.add(result)
+                        print(f"[Brute] Found: {result}")
+                except Exception:
+                    pass
+
+    def ptr_lookup(self):
+        """Perform reverse DNS lookups on known IP ranges"""
+        print("[+] Performing PTR lookups on discovered IPs...")
+        all_ips = set()
+        for ips in self.ip_cache.values():
+            for _, ip in ips:
+                all_ips.add(ip)
+        
+        if not all_ips:
+            print("[!] No IP information available for PTR lookups")
+            return
+            
+        print(f"[+] Checking {len(all_ips)} unique IPs for PTR records")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.threads) as executor:
+            futures = {executor.submit(self.check_ptr_record, ip): ip for ip in all_ips}
+            for future in concurrent.futures.as_completed(futures):
+                ip = futures[future]
+                try:
+                    hostnames = future.result()
+                    for hostname in hostnames:
+                        if hostname.endswith(f'.{self.domain}') and hostname not in self.subdomains:
+                            self.subdomains.add(hostname)
+                            print(f"[PTR] Found: {hostname}")
+                except Exception:
+                    pass
+
+    def check_ptr_record(self, ip):
+        """Check PTR record for an IP address"""
+        try:
+            hostnames = socket.gethostbyaddr(ip)
+            return [h.lower() for h in hostnames] if hostnames else []
+        except socket.herror:
+            return []
+        except Exception:
+            return []
 
     def cert_transparency(self):
         """Optimized CT log queries"""
@@ -869,6 +1050,8 @@ class SubdomainFinder:
     <div class="container">
         <header>
             <h1>Subdomain Report for {self.domain}</h1>
+            <h2>Using <font color=red><a href="https://github.com/bidhata/fast-subrecon/">Fast_Sub_Recon</a></font></h2>
+            <p>Script maintained by <a href="https://www.linkedin.com/in/krishpaul/">Krishnendu Paul</a></p>
             <p>Generated at: {time.strftime('%Y-%m-%d %H:%M:%S')}</p>
         </header>
         
