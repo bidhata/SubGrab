@@ -1,4 +1,4 @@
-# 🚀 Fast Sub Recon
+<align="center"># 🚀 Fast Sub Recon</align>
 
 <div align="center">
 
