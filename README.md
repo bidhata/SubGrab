@@ -119,20 +119,59 @@ python3 fast_sub_recon.py example.com --timeout 5
 python3 fast_sub_recon.py example.com -o active_subs.txt --active-only
 ```
 
-### Command Line Options
+### Command-line Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `domain` | Target domain to scan | Required |
-| `-t, --threads` | Number of concurrent threads | 200 |
-| `-s, --shodan` | Shodan API key for enhanced data | None |
-| `-w, --wordlist` | Custom wordlist file path | Built-in list |
-| `--timeout` | Request timeout in seconds | 3 |
-| `--fast` | Skip detailed Shodan lookups | False |
-| `-o, --output` | Legacy output file (deprecated) | Auto-generated |
-| `--active-only` | Save only active subdomains | False |
-| `--inactive-only` | Save only inactive subdomains | False |
+| Option | Description | Default Value | Example |
+|--------|-------------|---------------|---------|
+| `domain` | Target domain to scan **(required)** | N/A | `example.com` |
+| `-t`, `--threads` | Number of concurrent threads to use | `200` | `-t 500` |
+| `-s`, `--shodan` | Shodan API key for enhanced reconnaissance | `None` (disabled) | `-s YOUR_SHODAN_API_KEY` |
+| `-w`, `--wordlist` | Path to external subdomain wordlist file | Built-in wordlist | `-w custom_wordlist.txt` |
+| `--timeout` | Request timeout in seconds | `3` | `--timeout 5` |
+| `--fast` | Enable fast mode (skip Shodan lookups) | `False` | `--fast` |
+| `--scan-ssh` | Scan active subdomains for SSH port (22) | `False` | `--scan-ssh` |
+| `--custom-nameservers` | Custom DNS nameservers to use (space-separated) | System default | `--custom-nameservers 8.8.8.8 1.1.1.1` |
 
+### Usage Examples
+
+1. Basic scan with default settings:
+   ```bash
+   ./fast_sub_recon.py example.com
+   ```
+
+2. Scan with custom threads and timeout:
+   ```bash
+   ./fast_sub_recon.py example.com -t 500 --timeout 5
+   ```
+
+3. Scan with Shodan integration and custom wordlist:
+   ```bash
+   ./fast_sub_recon.py example.com -s YOUR_API_KEY -w custom_wordlist.txt
+   ```
+
+4. Full scan with SSH detection and custom DNS:
+   ```bash
+   ./fast_sub_recon.py example.com --scan-ssh --custom-nameservers 8.8.8.8 9.9.9.9
+   ```
+
+5. Fast scan mode:
+   ```bash
+   ./fast_sub_recon.py example.com --fast
+   ```
+
+### Output Files
+The tool automatically generates timestamped output files:
+- `{domain}_all_{timestamp}.txt` - All discovered subdomains
+- `{domain}_active_{timestamp}.txt` - Active HTTP(S) subdomains
+- `{domain}_inactive_{timestamp}.txt` - DNS-only subdomains
+- `{domain}_ssh_{timestamp}.txt` - Subdomains with open SSH port (when using `--scan-ssh`)
+
+### Important Notes
+- Always obtain proper authorization before scanning any domain
+- Shodan integration requires a valid API key from [shodan.io](https://www.shodan.io/)
+- For large domains, increase thread count (`-t`) and timeout (`--timeout`) values
+- Custom nameservers can help bypass DNS filtering or caching issues
+- Fast mode (`--fast`) significantly speeds up scans by skipping Shodan lookups
 ---
 
 ## 📋 Examples
