@@ -178,7 +178,7 @@ class SubdomainEnumerator:
             # Scan each unique IP found
             unique_ips = set()
             for subdomain, info in self.subdomain_info.items():
-                if info.get('ip'):
+                if info and info.get('ip'):
                     unique_ips.add(info['ip'])
             
             for ip in unique_ips:
@@ -187,26 +187,29 @@ class SubdomainEnumerator:
                     
                     # Add any hostnames that match our domain
                     for hostname in host.get('hostnames', []):
-                        if hostname.endswith(f'.{self.domain}'):
+                        if hostname and hostname.endswith(f'.{self.domain}'):
                             subdomains.add(hostname)
                     
                     # Add any domains from SSL certificates
-                    if 'ssl' in host.get('data', [{}])[0]:
-                        cert = host['data'][0]['ssl'].get('cert', {})
-                        for name in cert.get('subject', {}).get('CN', '').split(','):
-                            name = name.strip()
-                            if name.endswith(f'.{self.domain}'):
-                                subdomains.add(name)
-                        for alt_name in cert.get('alt_names', []):
-                            if alt_name.endswith(f'.{self.domain}'):
-                                subdomains.add(alt_name)
-                    
-                    # Add any domains from HTTP responses
-                    for item in host.get('data', []):
-                        if 'http' in item:
-                            for header in ['host', 'server', 'location']:
-                                if header in item['http']:
-                                    value = item['http'][header]
+                    if host.get('data'):
+                        for item in host['data']:
+                            if item.get('ssl', {}).get('cert'):
+                                cert = item['ssl']['cert']
+                                # Process subject CN
+                                if cert.get('subject', {}).get('CN'):
+                                    for name in cert['subject']['CN'].split(','):
+                                        name = name.strip()
+                                        if name and name.endswith(f'.{self.domain}'):
+                                            subdomains.add(name)
+                                # Process alt names
+                                for alt_name in cert.get('alt_names', []):
+                                    if alt_name and alt_name.endswith(f'.{self.domain}'):
+                                        subdomains.add(alt_name)
+                            
+                            # Add any domains from HTTP responses
+                            if item.get('http'):
+                                for header in ['host', 'server', 'location']:
+                                    value = item['http'].get(header)
                                     if isinstance(value, str) and value.endswith(f'.{self.domain}'):
                                         subdomains.add(value)
                     
@@ -311,48 +314,30 @@ class SubdomainEnumerator:
         
         return subdomains
 
-    def dnsdumpster(self):
-        """DNSDumpster enumeration"""
-        print(f"{Fore.CYAN}[*] Searching DNSDumpster...")
+    def rapiddns(self):
+        """RapidDNS enumeration"""
+        print(f"{Fore.CYAN}[*] Searching RapidDNS...")
         subdomains = set()
         
         try:
-            url = "https://dnsdumpster.com/"
-            session = self.get_session()
-            
-            # Get CSRF token with better error handling
-            response = session.get(url, timeout=30)
-            if response.status_code != 200:
-                print(f"{Fore.RED}[!] DNSDumpster returned status {response.status_code}")
-                return subdomains
-                
-            soup = BeautifulSoup(response.text, 'html.parser')
-            csrf_token = soup.find('input', {'name': 'csrfmiddlewaretoken'})
-            
-            if not csrf_token:
-                print(f"{Fore.RED}[!] Could not find CSRF token in DNSDumpster response")
-                return subdomains
-                
-            csrf_token = csrf_token.get('value')
-            
-            # Submit query
+            url = f"https://rapiddns.io/subdomain/{self.domain}?full=1"
             headers = {
-                'Referer': url,
-                'X-CSRFToken': csrf_token
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
-            data = {
-                'csrfmiddlewaretoken': csrf_token,
-                'targetip': self.domain
-            }
-            response = session.post(url, data=data, headers=headers, timeout=30)
             
+            response = self.get_session().get(url, headers=headers, timeout=70)
             if response.status_code == 200:
-                # Extract subdomains from results
-                domains = re.findall(r'([a-zA-Z0-9.-]+\.' + re.escape(self.domain) + r')', response.text)
-                subdomains.update(domains)
-                
+                soup = BeautifulSoup(response.text, 'html.parser')
+                table = soup.find('table', {'id': 'table'})
+                if table:
+                    for row in table.find_all('tr')[1:]:  # Skip header row
+                        cells = row.find_all('td')
+                        if len(cells) >= 1:
+                            domain = cells[0].get_text().strip()
+                            if domain.endswith(f'.{self.domain}'):
+                                subdomains.add(domain)
         except Exception as e:
-            print(f"{Fore.RED}[!] Error with DNSDumpster: {str(e)}")
+            print(f"{Fore.RED}[!] Error with RapidDNS: {str(e)}")
         
         return subdomains
 
@@ -629,7 +614,7 @@ class SubdomainEnumerator:
                     if 'text/html' in response.headers.get('Content-Type', ''):
                         soup = BeautifulSoup(response.text, 'html.parser')
                         title_tag = soup.find('title')
-                        if title_tag:
+                        if title_tag and title_tag.text:
                             info['title'] = title_tag.text.strip()[:100]
                     
                     break
@@ -667,26 +652,27 @@ class SubdomainEnumerator:
                         info['ports'] = host['ports']
                     
                     # Check for interesting services
-                    for item in host.get('data', []):
-                        port = item.get('port', 0)
-                        product = item.get('product', '')
-                        
-                        # Add service detection
-                        if port == 22 and not info['ssh_open']:
-                            info['ssh_open'] = True
-                            self.ssh_enabled.add(subdomain)
-                        
-                        # Add other service checks as needed
-                        if port == 3306:
-                            info['mysql'] = True
-                        if port == 5432:
-                            info['postgresql'] = True
-                        if port == 27017:
-                            info['mongodb'] = True
-                        if port == 5984:
-                            info['couchdb'] = True
-                        if port == 6379:
-                            info['redis'] = True
+                    if host.get('data'):
+                        for item in host['data']:
+                            port = item.get('port', 0)
+                            product = item.get('product', '')
+                            
+                            # Add service detection
+                            if port == 22 and not info['ssh_open']:
+                                info['ssh_open'] = True
+                                self.ssh_enabled.add(subdomain)
+                            
+                            # Add other service checks as needed
+                            if port == 3306:
+                                info['mysql'] = True
+                            if port == 5432:
+                                info['postgresql'] = True
+                            if port == 27017:
+                                info['mongodb'] = True
+                            if port == 5984:
+                                info['couchdb'] = True
+                            if port == 6379:
+                                info['redis'] = True
                 except shodan.exception.APIError:
                     pass
                 except Exception as e:
@@ -719,7 +705,7 @@ class SubdomainEnumerator:
             self.certificate_transparency,
             self.web_archives,
             self.search_engines,
-            self.dnsdumpster,
+            self.rapiddns,
             self.security_apis,
             self.github_code_search,
             self.dns_enumeration,
@@ -791,7 +777,7 @@ class SubdomainEnumerator:
                     info.get('active', False),
                     info.get('status_code', ''),
                     info.get('server', ''),
-                    info.get('title', ''),
+                    (info.get('title') or ''),
                     info.get('ip', ''),
                     info.get('ssh_open', False),
                     info.get('takeover_vulnerable', False),
@@ -804,168 +790,573 @@ class SubdomainEnumerator:
         print(f"{Fore.GREEN}[+] Reports generated in {self.output_dir}/")
 
     def generate_html_report(self):
-        """Generate interactive HTML report"""
+        """Generate interactive HTML report with minimalist design and tabs"""
+        
+        # Helper function to generate table rows for different categories
+        def generate_table_rows(subdomain_list):
+            rows = ""
+            for subdomain in sorted(subdomain_list):
+                info = self.subdomain_info.get(subdomain, {})
+                status = "Active" if info.get('active', False) else "Inactive"
+                status_badge = f'<span class="status-badge status-{status.lower()}">{status}</span>'
+                
+                ssh_badge = f'<span class="status-badge status-{"warning" if info.get("ssh_open", False) else "inactive"}">{"Yes" if info.get("ssh_open", False) else "No"}</span>'
+                takeover_badge = f'<span class="status-badge status-{"danger" if info.get("takeover_vulnerable", False) else "inactive"}">{"Yes" if info.get("takeover_vulnerable", False) else "No"}</span>'
+                
+                ports_html = ""
+                for port in info.get('ports', []):
+                    port_class = "port-badge"
+                    if port in [80, 443, 8080, 8443]:
+                        port_class += " port-web"
+                    elif port in [22, 21, 23]:
+                        port_class += " port-admin"
+                    elif port in [3306, 5432, 27017, 6379]:
+                        port_class += " port-db"
+                    else:
+                        port_class += " port-other"
+                    ports_html += f'<span class="{port_class}">{port}</span>'
+                
+                title_display = (info.get('title') or '')[:60] + ('...' if len((info.get('title') or '')) > 60 else '')
+                
+                rows += f"""
+                    <tr>
+                        <td><a href="http://{subdomain}" target="_blank" class="subdomain-link">{subdomain}</a></td>
+                        <td>{status_badge}</td>
+                        <td>{info.get('status_code', '')}</td>
+                        <td>{info.get('server', '')}</td>
+                        <td title="{(info.get('title') or '')}">{title_display}</td>
+                        <td>{info.get('ip', '')}</td>
+                        <td>{ssh_badge}</td>
+                        <td>{takeover_badge}</td>
+                        <td>{ports_html}</td>
+                    </tr>
+                """
+            return rows
+        
+        # Generate data for different tabs
+        all_rows = generate_table_rows(self.subdomains)
+        active_rows = generate_table_rows(self.active_subdomains)
+        inactive_rows = generate_table_rows(self.inactive_subdomains)
+        
+        # Security tab includes SSH enabled and takeover candidates
+        security_subdomains = self.ssh_enabled.union(self.takeover_candidates)
+        security_rows = generate_table_rows(security_subdomains)
+        
         html_content = f"""
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
-            <title>Subdomain Enumeration Report - {self.domain}</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>SubGrab Report - {self.domain}</title>
+            <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+            <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+            <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
             <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
-                .header {{ background-color: #3483eb; color: white; padding: 20px; border-radius: 8px; }}
-                .stats {{ display: flex; justify-content: space-around; margin: 20px 0; }}
-                .stat-card {{ background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }}
-                .stat-number {{ font-size: 2em; font-weight: bold; color: #3498db; }}
-                .filters {{ margin: 20px 0; }}
-                .filter-btn {{ background-color: #3498db; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 5px; cursor: pointer; }}
-                .filter-btn:hover {{ background-color: #2980b9; }}
-                .filter-btn.active {{ background-color: #e74c3c; }}
-                table {{ width: 100%; border-collapse: collapse; background-color: white; border-radius: 8px; overflow: hidden; }}
-                th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-                th {{ background-color: #34495e; color: white; }}
-                tr:hover {{ background-color: #f8f9fa; }}
-                .status-active {{ color: #27ae60; font-weight: bold; }}
-                .status-inactive {{ color: #e74c3c; font-weight: bold; }}
-                .status-ssh {{ color: #f39c12; font-weight: bold; }}
-                .status-takeover {{ color: #e74c3c; font-weight: bold; background-color: #ffebee; }}
-                .hidden {{ display: none; }}
-                .ports {{ max-width: 200px; overflow-x: auto; white-space: nowrap; }}
+                :root {{
+                    --primary-color: #2563eb;
+                    --success-color: #059669;
+                    --warning-color: #d97706;
+                    --danger-color: #dc2626;
+                    --inactive-color: #6b7280;
+                    --bg-primary: #ffffff;
+                    --bg-secondary: #f8fafc;
+                    --border-color: #e2e8f0;
+                    --text-primary: #1e293b;
+                    --text-secondary: #64748b;
+                }}
+                
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    background-color: var(--bg-secondary);
+                    color: var(--text-primary);
+                    line-height: 1.6;
+                }}
+                
+                .container {{
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 2rem 1rem;
+                }}
+                
+                .header {{
+                    background: linear-gradient(135deg, var(--primary-color), #1d4ed8);
+                    color: white;
+                    padding: 2rem;
+                    border-radius: 12px;
+                    margin-bottom: 2rem;
+                    text-align: center;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+                }}
+                
+                .header h1 {{
+                    font-size: 2rem;
+                    font-weight: 700;
+                    margin-bottom: 0.5rem;
+                }}
+                
+                .header h2 {{
+                    font-size: 1.25rem;
+                    font-weight: 500;
+                    opacity: 0.9;
+                    margin-bottom: 0.5rem;
+                }}
+                
+                .header p {{
+                    opacity: 0.8;
+                    font-size: 0.9rem;
+                }}
+                
+                .stats-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 1rem;
+                    margin-bottom: 2rem;
+                }}
+                
+                .stat-card {{
+                    background: var(--bg-primary);
+                    padding: 1.5rem;
+                    border-radius: 8px;
+                    text-align: center;
+                    border: 1px solid var(--border-color);
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }}
+                
+                .stat-card:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+                }}
+                
+                .stat-number {{
+                    font-size: 2rem;
+                    font-weight: 700;
+                    margin-bottom: 0.5rem;
+                }}
+                
+                .stat-label {{
+                    color: var(--text-secondary);
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                }}
+                
+                .tabs {{
+                    background: var(--bg-primary);
+                    border-radius: 8px;
+                    border: 1px solid var(--border-color);
+                    overflow: hidden;
+                }}
+                
+                .tab-nav {{
+                    display: flex;
+                    background: var(--bg-secondary);
+                    border-bottom: 1px solid var(--border-color);
+                    overflow-x: auto;
+                }}
+                
+                .tab-button {{
+                    background: none;
+                    border: none;
+                    padding: 1rem 1.5rem;
+                    cursor: pointer;
+                    font-weight: 500;
+                    color: var(--text-secondary);
+                    border-bottom: 3px solid transparent;
+                    transition: all 0.2s ease;
+                    white-space: nowrap;
+                }}
+                
+                .tab-button:hover {{
+                    background: rgba(37, 99, 235, 0.05);
+                    color: var(--primary-color);
+                }}
+                
+                .tab-button.active {{
+                    color: var(--primary-color);
+                    border-bottom-color: var(--primary-color);
+                    background: var(--bg-primary);
+                }}
+                
+                .tab-content {{
+                    display: none;
+                    padding: 1.5rem;
+                }}
+                
+                .tab-content.active {{
+                    display: block;
+                }}
+                
+                .table-container {{
+                    overflow-x: auto;
+                    border-radius: 6px;
+                    border: 1px solid var(--border-color);
+                }}
+                
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    background: var(--bg-primary);
+                }}
+                
+                th {{
+                    background: var(--bg-secondary);
+                    padding: 0.75rem;
+                    text-align: left;
+                    font-weight: 600;
+                    color: var(--text-primary);
+                    border-bottom: 1px solid var(--border-color);
+                    font-size: 0.875rem;
+                }}
+                
+                td {{
+                    padding: 0.75rem;
+                    border-bottom: 1px solid var(--border-color);
+                    font-size: 0.875rem;
+                }}
+                
+                tr:hover {{
+                    background: rgba(37, 99, 235, 0.02);
+                }}
+                
+                .subdomain-link {{
+                    color: var(--primary-color);
+                    text-decoration: none;
+                    font-weight: 500;
+                }}
+                
+                .subdomain-link:hover {{
+                    text-decoration: underline;
+                }}
+                
+                .status-badge {{
+                    display: inline-block;
+                    padding: 0.25rem 0.5rem;
+                    border-radius: 4px;
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 0.025em;
+                }}
+                
+                .status-active {{
+                    background: rgba(5, 150, 105, 0.1);
+                    color: var(--success-color);
+                }}
+                
+                .status-inactive {{
+                    background: rgba(107, 114, 128, 0.1);
+                    color: var(--inactive-color);
+                }}
+                
+                .status-warning {{
+                    background: rgba(217, 119, 6, 0.1);
+                    color: var(--warning-color);
+                }}
+                
+                .status-danger {{
+                    background: rgba(220, 38, 38, 0.1);
+                    color: var(--danger-color);
+                }}
+                
+                .port-badge {{
+                    display: inline-block;
+                    padding: 0.125rem 0.375rem;
+                    margin: 0.125rem;
+                    border-radius: 3px;
+                    font-size: 0.7rem;
+                    font-weight: 500;
+                }}
+                
+                .port-web {{
+                    background: rgba(37, 99, 235, 0.1);
+                    color: var(--primary-color);
+                }}
+                
+                .port-admin {{
+                    background: rgba(217, 119, 6, 0.1);
+                    color: var(--warning-color);
+                }}
+                
+                .port-db {{
+                    background: rgba(5, 150, 105, 0.1);
+                    color: var(--success-color);
+                }}
+                
+                .port-other {{
+                    background: rgba(107, 114, 128, 0.1);
+                    color: var(--inactive-color);
+                }}
+                
+                /* DataTables customization */
+                .dataTables_wrapper {{
+                    font-size: 0.875rem;
+                }}
+                
+                .dataTables_filter input {{
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    padding: 0.5rem;
+                    margin-left: 0.5rem;
+                }}
+                
+                .dataTables_length select {{
+                    border: 1px solid var(--border-color);
+                    border-radius: 4px;
+                    padding: 0.25rem;
+                    margin: 0 0.5rem;
+                }}
+                
+                .dataTables_paginate .paginate_button {{
+                    padding: 0.5rem 0.75rem;
+                    margin: 0 0.125rem;
+                    border-radius: 4px;
+                    border: 1px solid var(--border-color);
+                    background: var(--bg-primary);
+                    color: var(--text-primary);
+                }}
+                
+                .dataTables_paginate .paginate_button:hover {{
+                    background: var(--primary-color);
+                    color: white;
+                    border-color: var(--primary-color);
+                }}
+                
+                .dataTables_paginate .paginate_button.current {{
+                    background: var(--primary-color);
+                    color: white;
+                    border-color: var(--primary-color);
+                }}
+                
+                @media (max-width: 768px) {{
+                    .container {{
+                        padding: 1rem 0.5rem;
+                    }}
+                    
+                    .header {{
+                        padding: 1.5rem;
+                    }}
+                    
+                    .header h1 {{
+                        font-size: 1.5rem;
+                    }}
+                    
+                    .stats-grid {{
+                        grid-template-columns: repeat(2, 1fr);
+                    }}
+                    
+                    .tab-button {{
+                        padding: 0.75rem 1rem;
+                        font-size: 0.875rem;
+                    }}
+                }}
             </style>
         </head>
         <body>
-            <div class="header" align="center">
-                <center><h1><a href="https://github.com/bidhata/SubGrab/">SubGrab</a> Tool - By Krishnendu</h1>
-                <h2>Report for Domain: {self.domain}</h2>
-                <p>Scan Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <div class="container">
+                <div class="header">
+                    <h1><a href="https://github.com/bidhata/SubGrab">SubGrab</a> Report for</h1>
+                    <h2>{self.domain}</h2>
+                    <p>Generated on {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}</p>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: var(--primary-color);">{len(self.subdomains)}</div>
+                        <div class="stat-label">Total Subdomains</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: var(--success-color);">{len(self.active_subdomains)}</div>
+                        <div class="stat-label">Active</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: var(--inactive-color);">{len(self.inactive_subdomains)}</div>
+                        <div class="stat-label">Inactive</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: var(--warning-color);">{len(self.ssh_enabled)}</div>
+                        <div class="stat-label">SSH Enabled</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" style="color: var(--danger-color);">{len(self.takeover_candidates)}</div>
+                        <div class="stat-label">Takeover Risk</div>
+                    </div>
+                </div>
+                
+                <div class="tabs">
+                    <div class="tab-nav">
+                        <button class="tab-button active" onclick="showTab('overview')">Overview</button>
+                        <button class="tab-button" onclick="showTab('all')">All Subdomains ({len(self.subdomains)})</button>
+                        <button class="tab-button" onclick="showTab('active')">Active ({len(self.active_subdomains)})</button>
+                        <button class="tab-button" onclick="showTab('inactive')">Inactive ({len(self.inactive_subdomains)})</button>
+                        <button class="tab-button" onclick="showTab('security')">Security ({len(security_subdomains)})</button>
+                    </div>
+                    
+                    <div id="overview" class="tab-content active">
+                        <h3 style="margin-bottom: 1rem; color: var(--text-primary);">Scan Summary</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+                            <div>
+                                <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem;">Discovery Methods</h4>
+                                <ul style="list-style: none; padding: 0;">
+                                    <li style="padding: 0.25rem 0;">✓ Certificate Transparency</li>
+                                    <li style="padding: 0.25rem 0;">✓ DNS Enumeration</li>
+                                    <li style="padding: 0.25rem 0;">✓ Web Archives</li>
+                                    <li style="padding: 0.25rem 0;">✓ Search Engines</li>
+                                    <li style="padding: 0.25rem 0;">✓ Security APIs</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 style="color: var(--text-secondary); margin-bottom: 0.5rem;">Key Findings</h4>
+                                <ul style="list-style: none; padding: 0;">
+                                    <li style="padding: 0.25rem 0;">🌐 {len(self.active_subdomains)} active web services</li>
+                                    <li style="padding: 0.25rem 0;">🔒 {len(self.ssh_enabled)} SSH-enabled hosts</li>
+                                    <li style="padding: 0.25rem 0;">⚠️ {len(self.takeover_candidates)} potential takeover risks</li>
+                                    <li style="padding: 0.25rem 0;">📊 {len(self.inactive_subdomains)} inactive subdomains</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="all" class="tab-content">
+                        <div class="table-container">
+                            <table id="allTable">
+                                <thead>
+                                    <tr>
+                                        <th>Subdomain</th>
+                                        <th>Status</th>
+                                        <th>Code</th>
+                                        <th>Server</th>
+                                        <th>Title</th>
+                                        <th>IP</th>
+                                        <th>SSH</th>
+                                        <th>Takeover</th>
+                                        <th>Ports</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {all_rows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div id="active" class="tab-content">
+                        <div class="table-container">
+                            <table id="activeTable">
+                                <thead>
+                                    <tr>
+                                        <th>Subdomain</th>
+                                        <th>Status</th>
+                                        <th>Code</th>
+                                        <th>Server</th>
+                                        <th>Title</th>
+                                        <th>IP</th>
+                                        <th>SSH</th>
+                                        <th>Takeover</th>
+                                        <th>Ports</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {active_rows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div id="inactive" class="tab-content">
+                        <div class="table-container">
+                            <table id="inactiveTable">
+                                <thead>
+                                    <tr>
+                                        <th>Subdomain</th>
+                                        <th>Status</th>
+                                        <th>Code</th>
+                                        <th>Server</th>
+                                        <th>Title</th>
+                                        <th>IP</th>
+                                        <th>SSH</th>
+                                        <th>Takeover</th>
+                                        <th>Ports</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {inactive_rows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div id="security" class="tab-content">
+                        <div class="table-container">
+                            <table id="securityTable">
+                                <thead>
+                                    <tr>
+                                        <th>Subdomain</th>
+                                        <th>Status</th>
+                                        <th>Code</th>
+                                        <th>Server</th>
+                                        <th>Title</th>
+                                        <th>IP</th>
+                                        <th>SSH</th>
+                                        <th>Takeover</th>
+                                        <th>Ports</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {security_rows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
-            
-            <div class="stats">
-                <div class="stat-card">
-                    <div class="stat-number">{len(self.subdomains)}</div>
-                    <div>Total Subdomains</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{len(self.active_subdomains)}</div>
-                    <div>Active Subdomains</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{len(self.inactive_subdomains)}</div>
-                    <div>Inactive Subdomains</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{len(self.ssh_enabled)}</div>
-                    <div>SSH Enabled</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number">{len(self.takeover_candidates)}</div>
-                    <div>Takeover Candidates</div>
-                </div>
-            </div>
-            
-            <div class="filters">
-                <button class="filter-btn" onclick="filterTable('all')">All</button>
-                <button class="filter-btn" onclick="filterTable('active')">Active Only</button>
-                <button class="filter-btn" onclick="filterTable('inactive')">Inactive Only</button>
-                <button class="filter-btn" onclick="filterTable('ssh')">SSH Enabled</button>
-                <button class="filter-btn" onclick="filterTable('takeover')">Takeover Candidates</button>
-            </div>
-            
-            <table id="subdomainTable">
-                <thead>
-                    <tr>
-                        <th>Subdomain</th>
-                        <th>Status</th>
-                        <th>Status Code</th>
-                        <th>Server</th>
-                        <th>Title</th>
-                        <th>IP Address</th>
-                        <th>SSH</th>
-                        <th>Takeover Risk</th>
-                        <th>Ports</th>
-                    </tr>
-                </thead>
-                <tbody>
-        """
-        
-        for subdomain in sorted(self.subdomains):
-            info = self.subdomain_info.get(subdomain, {})
-            status = "Active" if info.get('active', False) else "Inactive"
-            status_class = "status-active" if info.get('active', False) else "status-inactive"
-            
-            row_classes = []
-            if info.get('active', False):
-                row_classes.append('active')
-            else:
-                row_classes.append('inactive')
-            
-            if info.get('ssh_open', False):
-                row_classes.append('ssh')
-            
-            if info.get('takeover_vulnerable', False):
-                row_classes.append('takeover')
-            
-            html_content += f"""
-                    <tr class="{' '.join(row_classes)}">
-                        <td><a href="http://{subdomain}" target="_blank">{subdomain}</a></td>
-                        <td class="{status_class}">{status}</td>
-                        <td>{info.get('status_code', '')}</td>
-                        <td>{info.get('server', '')}</td>
-                        <td>{info.get('title', '')}</td>
-                        <td>{info.get('ip', '')}</td>
-                        <td class="{'status-ssh' if info.get('ssh_open', False) else ''}">{
-                            'Yes' if info.get('ssh_open', False) else 'No'
-                        }</td>
-                        <td class="{'status-takeover' if info.get('takeover_vulnerable', False) else ''}">{
-                            'Yes' if info.get('takeover_vulnerable', False) else 'No'
-                        }</td>
-                        <td class="ports">{', '.join(map(str, info.get('ports', [])))}</td>
-                    </tr>
-            """
-        
-        html_content += """
-                </tbody>
-            </table>
             
             <script>
-                function filterTable(filter) {
-                    const table = document.getElementById('subdomainTable');
-                    const rows = table.getElementsByTagName('tr');
+                function showTab(tabName) {{
+                    // Hide all tab contents
+                    const contents = document.querySelectorAll('.tab-content');
+                    contents.forEach(content => content.classList.remove('active'));
                     
                     // Remove active class from all buttons
-                    const buttons = document.getElementsByClassName('filter-btn');
-                    for (let btn of buttons) {
-                        btn.classList.remove('active');
-                    }
+                    const buttons = document.querySelectorAll('.tab-button');
+                    buttons.forEach(button => button.classList.remove('active'));
+                    
+                    // Show selected tab content
+                    document.getElementById(tabName).classList.add('active');
                     
                     // Add active class to clicked button
                     event.target.classList.add('active');
+                }}
+                
+                $(document).ready(function() {{
+                    const tableConfig = {{
+                        responsive: true,
+                        pageLength: 25,
+                        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+                        order: [[0, 'asc']],
+                        language: {{
+                            search: "Search:",
+                            lengthMenu: "Show _MENU_ entries",
+                            info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                            paginate: {{
+                                first: "First",
+                                last: "Last",
+                                next: "Next",
+                                previous: "Previous"
+                            }}
+                        }}
+                    }};
                     
-                    // Filter rows
-                    for (let i = 1; i < rows.length; i++) {
-                        const row = rows[i];
-                        let show = false;
-                        
-                        switch(filter) {
-                            case 'all':
-                                show = true;
-                                break;
-                            case 'active':
-                                show = row.classList.contains('active');
-                                break;
-                            case 'inactive':
-                                show = row.classList.contains('inactive');
-                                break;
-                            case 'ssh':
-                                show = row.classList.contains('ssh');
-                                break;
-                            case 'takeover':
-                                show = row.classList.contains('takeover');
-                                break;
-                        }
-                        
-                        row.style.display = show ? '' : 'none';
-                    }
-                }
+                    $('#allTable').DataTable(tableConfig);
+                    $('#activeTable').DataTable(tableConfig);
+                    $('#inactiveTable').DataTable(tableConfig);
+                    $('#securityTable').DataTable(tableConfig);
+                }});
             </script>
         </body>
         </html>
