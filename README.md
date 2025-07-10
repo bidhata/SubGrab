@@ -12,7 +12,7 @@
 ## ✨ Features
 
 - 🔎 **Passive Reconnaissance**:  
-  Certificate Transparency logs, Web Archives, Search Engines, DNSDumpster, GitHub, VirusTotal, Censys, SecurityTrails, and more.
+  Certificate Transparency logs, Web Archives, Search Engines, RapidDNS, GitHub, VirusTotal, Censys, SecurityTrails, Shodan and more.
 
 - 🌐 **Advanced DNS Enumeration**:  
   Brute-force with permutations, SRV records, Zone transfers, NSEC walking, Reverse DNS.
