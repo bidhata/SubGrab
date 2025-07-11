@@ -42,7 +42,7 @@ pip install -r requirements.txt
 Or install dependencies manually:
 
 ```bash
-pip install requests dnspython colorama beautifulsoup4 tqdm ratelimit
+pip install requests dnspython colorama beautifulsoup4 tqdm ratelimit shodan
 ```
 
 ---
