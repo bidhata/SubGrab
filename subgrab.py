@@ -65,6 +65,7 @@ class SubdomainEnumerator:
         self.ssh_enabled = set()
         self.takeover_candidates = set()
         self.subdomain_info = {}
+        self.takeover_reasons = {}
      
         # Thread-local storage
         self.thread_local = threading.local()
@@ -109,7 +110,165 @@ class SubdomainEnumerator:
             'tilda.cc': ['Domain has been assigned'],
             'wordpress.com': ['Do you want to register'],
             'pantheonsite.io': ['The gods are wise'],
-            'gitbook.com': ['An error occurred']
+            'gitbook.com': ['An error occurred'],
+            'azurewebsites.net': ['404 Web Site not found', 'The resource you are looking for has been removed'],
+            'cloudapp.net': ['404 Web Site not found', 'No such host'],
+            'blob.core.windows.net': ['The specified blob does not exist'],
+            'trafficmanager.net': ['Resource Not Found'],
+            'azureedge.net': ['The resource you are looking for has been removed'],
+            'fastly.net': ['Fastly error: unknown domain'],
+            'shopify.com': ['Sorry, this shop is currently unavailable'],
+            'readthedocs.io': ['This page does not exist'],
+            'intercom.io': ['Uh oh. That page doesn\'t exist'],
+            'tumblr.com': ['There\'s nothing here'],
+            'strikinglydns.com': ['Page Not Found'],
+            'cargo.site': ['404 Not Found'],
+            'freshdesk.com': ['Oops. The page you were looking for doesn\'t exist'],
+            'calendly.com': ['This page is no longer active'],
+            'acquia-sites.com': ['Website not found'],
+            'contently.com': ['Page Not Found'],
+            'helpscoutdocs.com': ['Docs not found'],
+            'bigcartel.com': ['Oops! We couldn\'t find that page'],
+            'desk.com': ['Please try again or try Desk.com'],
+            'myshopify.com': ['Sorry, this shop is currently unavailable'],
+            'readme.io': ['Project doesn\'t exist... yet!'],
+            'unbouncepages.com': ['The requested URL was not found'],
+            'wpengine.com': ['The site you were looking for couldn\'t be found.'],
+            'firebaseapp.com': ['Firebase App Not Found', '404 Firebase'],
+            'netlify.app': ['Not Found - Request ID:', '404 Netlify'],
+            'vercel.app': ['404: This page could not be found', '404 Vercel'],
+            'fly.dev': ['404 Not Found', 'Fly.io Application Error'],
+            'render.com': ['404 Not Found', 'Render Application Error'],
+            'digitaloceanspaces.com': ['NoSuchKey', 'The specified key does not exist'],
+            's3.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website-us-east-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website-us-west-2.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website-eu-west-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.ap-south-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.ca-central-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.eu-central-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.eu-west-2.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.eu-west-3.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.sa-east-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website-us-west-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.ap-northeast-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.ap-northeast-2.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.ap-southeast-1.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            's3-website.ap-southeast-2.amazonaws.com': ['NoSuchBucket', 'The specified bucket does not exist'],
+            'googleapis.com': ['Error 404 (Not Found)', 'Google Cloud Storage - Not Found'],
+            'storage.googleapis.com': ['NoSuchKey', 'The specified key does not exist'],
+            'appspot.com': ['Error: Not Found', '404 Google App Engine'],
+            'cloudfunctions.net': ['Error: Not Found', '404 Google Cloud Functions'],
+            'firebaseio.com': ['Firebase Database Not Found'],
+            'web.app': ['Firebase Hosting Not Found'],
+            'ghost.io': ['404 Ghost'],
+            'hatenablog.com': ['404 Hatena Blog'],
+            'hatenadiary.com': ['404 Hatena Diary'],
+            'hatenadiary.jp': ['404 Hatena Diary'],
+            'hatenastaff.com': ['404 Hatena Staff'],
+            'kintone.com': ['404 Kintone'],
+            'kintone.cybozu.com': ['404 Cybozu Kintone'],
+            'cybozu.com': ['404 Cybozu'],
+            'cybozu.jp': ['404 Cybozu'],
+            'wixsite.com': ['404 Wix'],
+            'wix.com': ['404 Wix'],
+            'weebly.com': ['404 Weebly'],
+            'webnode.com': ['404 Webnode'],
+            'webnode.hu': ['404 Webnode'],
+            'webnode.sk': ['404 Webnode'],
+            'webnode.cz': ['404 Webnode'],
+            'webnode.ro': ['404 Webnode'],
+            'webnode.pt': ['404 Webnode'],
+            'webnode.cl': ['404 Webnode'],
+            'webnode.mx': ['404 Webnode'],
+            'webnode.com.br': ['404 Webnode'],
+            'webnode.com.ar': ['404 Webnode'],
+            'webnode.com.co': ['404 Webnode'],
+            'webnode.com.ve': ['404 Webnode'],
+            'webnode.com.pe': ['404 Webnode'],
+            'webnode.com.ec': ['404 Webnode'],
+            'webnode.com.bo': ['404 Webnode'],
+            'webnode.com.py': ['404 Webnode'],
+            'webnode.com.uy': ['404 Webnode'],
+            'webnode.com.cr': ['404 Webnode'],
+            'webnode.com.pa': ['404 Webnode'],
+            'webnode.com.gt': ['404 Webnode'],
+            'webnode.com.sv': ['404 Webnode'],
+            'webnode.com.hn': ['404 Webnode'],
+            'webnode.com.ni': ['404 Webnode'],
+            'webnode.com.do': ['404 Webnode'],
+            'webnode.com.pr': ['404 Webnode'],
+            'squarespace.com': ['404 Squarespace'],
+            'square.site': ['404 Square'],
+            'squareup.com': ['404 Square'],
+            'godaddy.com': ['404 GoDaddy'],
+            'godaddysites.com': ['404 GoDaddy'],
+            'secureserver.net': ['404 Secure Server'],
+            'hubspot.com': ['404 HubSpot'],
+            'hubspotusercontent.com': ['404 HubSpot'],
+            'hubspotusercontent.net': ['404 HubSpot'],
+            'hubspotusercontent.org': ['404 HubSpot'],
+            'hubspotusercontent.io': ['404 HubSpot'],
+            'hubspotusercontent.co': ['404 HubSpot'],
+            'hubspotusercontent.eu': ['404 HubSpot'],
+            'hubspotusercontent.asia': ['404 HubSpot'],
+            'hubspotusercontent.africa': ['404 HubSpot'],
+            'hubspotusercontent.me': ['404 HubSpot'],
+            'hubspotusercontent.us': ['404 HubSpot'],
+            'hubspotusercontent.ca': ['404 HubSpot'],
+            'hubspotusercontent.com.au': ['404 HubSpot'],
+            'hubspotusercontent.co.uk': ['404 HubSpot'],
+            'hubspotusercontent.in': ['404 HubSpot'],
+            'hubspotusercontent.jp': ['404 HubSpot'],
+            'hubspotusercontent.de': ['404 HubSpot'],
+            'hubspotusercontent.fr': ['404 HubSpot'],
+            'hubspotusercontent.es': ['404 HubSpot'],
+            'hubspotusercontent.it': ['404 HubSpot'],
+            'hubspotusercontent.pt': ['404 HubSpot'],
+            'hubspotusercontent.nl': ['404 HubSpot'],
+            'hubspotusercontent.se': ['404 HubSpot'],
+            'hubspotusercontent.no': ['404 HubSpot'],
+            'hubspotusercontent.dk': ['404 HubSpot'],
+            'hubspotusercontent.fi': ['404 HubSpot'],
+            'hubspotusercontent.pl': ['404 HubSpot'],
+            'hubspotusercontent.ru': ['404 HubSpot'],
+            'hubspotusercontent.cn': ['404 HubSpot'],
+            'hubspotusercontent.tw': ['404 HubSpot'],
+            'hubspotusercontent.hk': ['404 HubSpot'],
+            'hubspotusercontent.sg': ['404 HubSpot'],
+            'hubspotusercontent.id': ['404 HubSpot'],
+            'hubspotusercontent.th': ['404 HubSpot'],
+            'hubspotusercontent.vn': ['404 HubSpot'],
+            'hubspotusercontent.ph': ['404 HubSpot'],
+            'hubspotusercontent.my': ['404 HubSpot'],
+            'hubspotusercontent.kr': ['404 HubSpot'],
+            'hubspotusercontent.tr': ['404 HubSpot'],
+            'hubspotusercontent.sa': ['404 HubSpot'],
+            'hubspotusercontent.ae': ['404 HubSpot'],
+            'hubspotusercontent.il': ['404 HubSpot'],
+            'hubspotusercontent.za': ['404 HubSpot'],
+            'hubspotusercontent.ng': ['404 HubSpot'],
+            'hubspotusercontent.ke': ['404 HubSpot'],
+            'hubspotusercontent.eg': ['404 HubSpot'],
+            'hubspotusercontent.mx': ['404 HubSpot'],
+            'hubspotusercontent.br': ['404 HubSpot'],
+            'hubspotusercontent.ar': ['404 HubSpot'],
+            'hubspotusercontent.cl': ['404 HubSpot'],
+            'hubspotusercontent.co': ['404 HubSpot'],
+            'hubspotusercontent.pe': ['404 HubSpot'],
+            'hubspotusercontent.ve': ['404 HubSpot'],
+            'hubspotusercontent.ec': ['404 HubSpot'],
+            'hubspotusercontent.bo': ['404 HubSpot'],
+            'hubspotusercontent.py': ['404 HubSpot'],
+            'hubspotusercontent.uy': ['404 HubSpot'],
+            'hubspotusercontent.cr': ['404 HubSpot'],
+            'hubspotusercontent.pa': ['404 HubSpot'],
+            'hubspotusercontent.gt': ['404 HubSpot'],
+            'hubspotusercontent.sv': ['404 HubSpot'],
+            'hubspotusercontent.hn': ['404 HubSpot'],
+            'hubspotusercontent.ni': ['404 HubSpot'],
+            'hubspotusercontent.do': ['404 HubSpot'],
+            'hubspotusercontent.pr': ['404 HubSpot']
         }
 
     def get_session(self):
@@ -546,32 +705,37 @@ class SubdomainEnumerator:
         return subdomains
 
     def check_subdomain_takeover(self, subdomain):
-        """Check if subdomain is vulnerable to takeover"""
+        """Check if subdomain is vulnerable to takeover and log reason"""
         try:
-            # Check DNS records
             resolver = self.get_resolver()
             try:
                 cname_answers = resolver.resolve(subdomain, 'CNAME')
                 for cname in cname_answers:
                     cname_target = str(cname.target).rstrip('.')
                     
-                    # Check if CNAME points to known vulnerable services
                     for service, indicators in self.takeover_services.items():
                         if service in cname_target:
-                            # Try to access the service
+                            # DNS resolution failed → dangling CNAME
+                            try:
+                                resolver.resolve(cname_target, 'A')
+                            except Exception:
+                                reason = f"dangling CNAME to {service}"
+                                self.takeover_reasons[subdomain] = reason
+                                return True
+                            
+                            # Fallback: HTTP content signature
                             try:
                                 response = self.get_session().get(f"http://{subdomain}", timeout=10)
                                 content = response.text
-                                
-                                # Check for takeover indicators
                                 for indicator in indicators:
                                     if indicator in content:
+                                        reason = f"signature match for {service}"
+                                        self.takeover_reasons[subdomain] = reason
                                         return True
                             except:
                                 pass
             except:
                 pass
-                
         except Exception as e:
             print(f"{Fore.RED}[!] Error checking takeover for {subdomain}: {e}")
         
@@ -748,8 +912,9 @@ class SubdomainEnumerator:
         if self.takeover_candidates:
             with open(f"{self.output_dir}/takeover_candidates.txt", 'w', encoding='utf-8') as f:
                 for subdomain in sorted(self.takeover_candidates):
-                    f.write(f"{subdomain}\n")
-        
+                    reason = self.takeover_reasons.get(subdomain, 'possible takeover')
+                    f.write(f"{subdomain} - {reason}\n")
+
         # JSON report
         json_report = {
             'domain': self.domain,
@@ -1160,8 +1325,8 @@ class SubdomainEnumerator:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1><a href="https://github.com/bidhata/SubGrab">SubGrab</a> Report for</h1>
-                    <h2>{self.domain}</h2>
+                    <h2><a href="https://github.com/bidhata/SubGrab">SubGrab</a> by @bidhata</h2>
+                    <h1> Report for {self.domain}</h1>
                     <p>Generated on {datetime.now().strftime('%B %d, %Y at %H:%M:%S')}</p>
                 </div>
                 
